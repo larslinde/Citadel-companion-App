@@ -1,0 +1,8 @@
+{
+  "name": "Citadel Companion AI",
+  "description": "Manage your Citadel paint collection and use Gemini AI to match colors from photos or get professional painting recipes.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
