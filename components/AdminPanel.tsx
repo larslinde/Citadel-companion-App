@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, Copy, LogIn, AlertTriangle, X } from 'lucide-react';
+import { Save, Plus, Trash2, Copy, LogIn, AlertTriangle, Loader2 } from 'lucide-react';
 import { Paint, PaintType } from '../types';
 
 interface AdminPanelProps {
@@ -15,6 +15,7 @@ declare global {
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState<Paint | null>(null);
   const [showExport, setShowExport] = useState(false);
   
@@ -25,19 +26,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
     hex: '#000000',
   });
 
+  // Robust Google Script Loader
   useEffect(() => {
-    if (window.google) {
-      window.google.accounts.id.initialize({
-        client_id: "YOUR_GOOGLE_CLIENT_ID", // Placeholder - user would need a real ID
-        callback: (response: any) => {
-          if (response.credential) setIsAuthenticated(true);
+    const checkGoogle = setInterval(() => {
+      if (window.google && window.google.accounts) {
+        setIsGoogleLoaded(true);
+        clearInterval(checkGoogle);
+        
+        // Vite specific environment variable access
+        const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
+
+        if (clientId) {
+          try {
+            window.google.accounts.id.initialize({
+              client_id: clientId,
+              callback: (response: any) => {
+                if (response.credential) setIsAuthenticated(true);
+              }
+            });
+            
+            const targetDiv = document.getElementById("googleSignInDiv");
+            if (targetDiv) {
+              window.google.accounts.id.renderButton(
+                targetDiv,
+                { theme: "outline", size: "large", width: 250 }
+              );
+            }
+          } catch (e) {
+            console.error("Google Sign-In initialization error:", e);
+          }
+        } else {
+          console.warn("VITE_GOOGLE_CLIENT_ID not found in environment variables.");
         }
-      });
-      window.google.accounts.id.renderButton(
-        document.getElementById("googleSignInDiv"),
-        { theme: "outline", size: "large" }
-      );
-    }
+      }
+    }, 500); // Check every 500ms
+
+    return () => clearInterval(checkGoogle);
   }, []);
 
   const handleSave = () => {
@@ -77,7 +101,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
   };
 
   const generateConfig = () => {
-    // Clean data for export (remove user state if desired, but here we reset owned/wishlist for the master list)
     const cleanList = paints.map(p => ({
       id: p.id,
       name: p.name,
@@ -92,28 +115,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-900 p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 p-4 text-white">
         <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 text-center max-w-md w-full">
           <div className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6">
             <LogIn className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-bold mb-2 text-white">Admin Access</h1>
+          <h1 className="text-2xl font-bold mb-2">Admin Access</h1>
           <p className="text-gray-400 mb-8">Sign in to manage the Citadel Paint Database.</p>
           
-          <div className="flex flex-col gap-4 items-center">
-            <div id="googleSignInDiv"></div>
+          <div className="flex flex-col gap-4 items-center w-full">
             
-            {/* Dev Bypass for the user since they don't have a ClientID configured yet */}
-            <div className="relative w-full py-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700"></div></div>
-              <div className="relative flex justify-center text-xs uppercase"><span className="bg-gray-800 px-2 text-gray-500">Or</span></div>
+            {/* Google Button Area */}
+            <div className="h-[40px] w-full flex justify-center">
+              {!isGoogleLoaded ? (
+                 <div className="flex items-center gap-2 text-gray-500 text-sm">
+                   <Loader2 className="w-4 h-4 animate-spin" />
+                   Loading Google Services...
+                 </div>
+              ) : !(import.meta as any).env.VITE_GOOGLE_CLIENT_ID ? (
+                <div className="text-yellow-500 text-xs px-4 text-center">
+                   Config missing: Add VITE_GOOGLE_CLIENT_ID to .env
+                </div>
+              ) : (
+                <div id="googleSignInDiv"></div>
+              )}
             </div>
+
+            {/* Divider */}
+            <div className="relative w-full py-4">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700"></div></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-gray-800 px-2 text-gray-500">Development Mode</span></div>
+            </div>
+
+            {/* Bypass Button */}
             <button 
               onClick={() => setIsAuthenticated(true)}
-              className="text-sm text-gray-500 hover:text-white underline"
+              className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
             >
-              Developer Bypass (Local Mode)
+              Enter Local Admin Mode
             </button>
+            <p className="text-xs text-gray-500">Use this if you haven't configured a Google Client ID yet.</p>
           </div>
         </div>
       </div>
@@ -125,7 +166,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Header */}
-        <div className="flex justify-between items-center border-b border-gray-800 pb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-800 pb-6 gap-4">
           <div>
             <h1 className="text-3xl font-bold">Paint Database Admin</h1>
             <p className="text-gray-400 mt-1">Add, edit, or remove paints from the global registry.</p>
@@ -133,7 +174,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
           <div className="flex gap-3">
              <button 
               onClick={() => setShowExport(!showExport)}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg font-semibold transition-colors"
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg font-semibold transition-colors shadow-lg shadow-purple-900/20"
             >
               <Copy className="w-4 h-4" />
               {showExport ? 'Hide Config' : 'Export JSON'}
@@ -146,7 +187,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
           <div className="bg-gray-950 border border-purple-500/30 rounded-xl p-4 shadow-2xl animate-in fade-in slide-in-from-top-4">
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-mono text-purple-400 text-sm font-bold">constants.ts</h3>
-              <button onClick={() => navigator.clipboard.writeText(generateConfig())} className="text-xs text-gray-400 hover:text-white">Copy to Clipboard</button>
+              <button onClick={() => navigator.clipboard.writeText(generateConfig())} className="text-xs text-gray-400 hover:text-white transition-colors">Copy to Clipboard</button>
             </div>
             <textarea 
               readOnly 
@@ -173,7 +214,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-white"
                 placeholder="e.g. Mephiston Red"
               />
             </div>
@@ -182,7 +223,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
               <select 
                 value={formData.type}
                 onChange={e => setFormData(prev => ({ ...prev, type: e.target.value as PaintType }))}
-                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-white"
               >
                 {Object.values(PaintType).map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -194,33 +235,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
                   type="color" 
                   value={formData.hex}
                   onChange={e => setFormData(prev => ({ ...prev, hex: e.target.value }))}
-                  className="h-9 w-12 rounded cursor-pointer bg-transparent border-0"
+                  className="h-[38px] w-12 rounded cursor-pointer bg-transparent border-0"
                 />
                 <input 
                   type="text" 
                   value={formData.hex}
                   onChange={e => setFormData(prev => ({ ...prev, hex: e.target.value }))}
-                  className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                  className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono text-white uppercase"
                 />
               </div>
             </div>
             <button 
               onClick={handleSave}
               disabled={!formData.name}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 h-[38px]"
             >
               {isEditing ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {isEditing ? 'Update Paint' : 'Add Paint'}
+              {isEditing ? 'Update' : 'Add'}
             </button>
           </div>
         </div>
 
         {/* List */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg">
           <table className="w-full text-left text-sm">
-            <thead className="bg-gray-900/50 text-gray-400 font-medium">
+            <thead className="bg-gray-900/50 text-gray-400 font-medium border-b border-gray-700">
               <tr>
-                <th className="p-4">Color</th>
+                <th className="p-4 w-16">Color</th>
                 <th className="p-4">Name</th>
                 <th className="p-4">Category</th>
                 <th className="p-4 text-right">Actions</th>
@@ -228,25 +269,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
             </thead>
             <tbody className="divide-y divide-gray-700">
               {[...paints].reverse().map(paint => (
-                <tr key={paint.id} className="hover:bg-gray-700/50 transition-colors">
+                <tr key={paint.id} className="hover:bg-gray-700/50 transition-colors group">
                   <td className="p-4">
                     <div className="w-8 h-8 rounded-full shadow-sm ring-1 ring-white/10" style={{ backgroundColor: paint.hex }} />
                   </td>
-                  <td className="p-4 font-medium">{paint.name}</td>
+                  <td className="p-4 font-medium text-gray-200">{paint.name}</td>
                   <td className="p-4">
                     <span className="bg-gray-900 text-gray-300 px-2 py-1 rounded text-xs border border-gray-600">{paint.type}</span>
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => handleEditClick(paint)}
-                        className="p-2 hover:bg-blue-900/50 text-blue-400 rounded transition-colors"
+                        className="p-2 hover:bg-blue-900/30 text-blue-400 rounded transition-colors"
+                        title="Edit"
                       >
-                        Edit
+                        <Save className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(paint.id)}
-                        className="p-2 hover:bg-red-900/50 text-red-400 rounded transition-colors"
+                        className="p-2 hover:bg-red-900/30 text-red-400 rounded transition-colors"
+                        title="Delete"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
