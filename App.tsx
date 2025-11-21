@@ -2,10 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { INITIAL_PAINTS } from './constants';
 import { Paint } from './types';
 import PaintLibrary from './components/PaintLibrary';
+import AdminPanel from './components/AdminPanel';
 
 const App: React.FC = () => {
+  // Basic Routing
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handleLocationChange = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
+
   const [paints, setPaints] = useState<Paint[]>(() => {
-    // Load from localStorage or fall back to initial constant
     const saved = localStorage.getItem('citadel_paints');
     if (saved) {
       return JSON.parse(saved);
@@ -13,7 +22,6 @@ const App: React.FC = () => {
     return INITIAL_PAINTS;
   });
 
-  // Persist paints whenever they change
   useEffect(() => {
     localStorage.setItem('citadel_paints', JSON.stringify(paints));
   }, [paints]);
@@ -30,6 +38,12 @@ const App: React.FC = () => {
     ));
   };
 
+  // Admin Route Check
+  if (currentPath.startsWith('/admin')) {
+    return <AdminPanel paints={paints} setPaints={setPaints} />;
+  }
+
+  // Default Route
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-950 text-gray-100 font-sans">
       <PaintLibrary 
