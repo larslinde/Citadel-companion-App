@@ -17,16 +17,15 @@ export interface Paint {
   wishlist: boolean;
 }
 
-export interface ChatMessage {
-  role: 'user' | 'model';
-  text: string;
-  isThinking?: boolean;
-}
-
 export interface MatchedColor {
   colorName: string;
   citadelPaint: string;
   paintType: string;
   reasoning: string;
   hexEstimate: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
 }
