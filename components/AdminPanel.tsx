@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, Copy, LogIn, AlertTriangle, Loader2 } from 'lucide-react';
+import { Save, Plus, Trash2, Copy, LogIn, AlertTriangle, Loader2, ShieldAlert } from 'lucide-react';
 import { Paint, PaintType } from '../types';
 
 interface AdminPanelProps {
@@ -18,6 +18,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState<Paint | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [envError, setEnvError] = useState<string | null>(null);
   
   // Form State
   const [formData, setFormData] = useState<Partial<Paint>>({
@@ -29,12 +30,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
   // Robust Google Script Loader
   useEffect(() => {
     const checkGoogle = setInterval(() => {
+      // Check if script loaded
       if (window.google && window.google.accounts) {
         setIsGoogleLoaded(true);
         clearInterval(checkGoogle);
         
         // Vite specific environment variable access
-        const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
+        let clientId = '';
+        try {
+           // @ts-ignore
+           clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        } catch (e) {
+           console.warn("Could not access import.meta.env");
+        }
 
         if (clientId) {
           try {
@@ -54,14 +62,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
             }
           } catch (e) {
             console.error("Google Sign-In initialization error:", e);
+            setEnvError("Google Sign-In failed to initialize.");
           }
         } else {
-          console.warn("VITE_GOOGLE_CLIENT_ID not found in environment variables.");
+          setEnvError("VITE_GOOGLE_CLIENT_ID missing in .env file.");
         }
       }
     }, 500); // Check every 500ms
 
-    return () => clearInterval(checkGoogle);
+    // Safety timeout to show manual login if Google takes too long
+    const timeout = setTimeout(() => {
+      if (!isGoogleLoaded) setIsGoogleLoaded(true); // Force UI to show fallback
+    }, 3000);
+
+    return () => {
+      clearInterval(checkGoogle);
+      clearTimeout(timeout);
+    }
   }, []);
 
   const handleSave = () => {
@@ -126,18 +143,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
           <div className="flex flex-col gap-4 items-center w-full">
             
             {/* Google Button Area */}
-            <div className="h-[40px] w-full flex justify-center">
+            <div className="min-h-[40px] w-full flex flex-col items-center justify-center gap-2">
               {!isGoogleLoaded ? (
                  <div className="flex items-center gap-2 text-gray-500 text-sm">
                    <Loader2 className="w-4 h-4 animate-spin" />
                    Loading Google Services...
                  </div>
-              ) : !(import.meta as any).env.VITE_GOOGLE_CLIENT_ID ? (
-                <div className="text-yellow-500 text-xs px-4 text-center">
-                   Config missing: Add VITE_GOOGLE_CLIENT_ID to .env
-                </div>
               ) : (
-                <div id="googleSignInDiv"></div>
+                <>
+                  <div id="googleSignInDiv"></div>
+                  {envError && (
+                    <div className="flex items-center gap-2 text-yellow-500 text-xs bg-yellow-900/20 px-3 py-2 rounded border border-yellow-700/50">
+                      <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                      {envError}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -150,11 +171,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ paints, setPaints }) => {
             {/* Bypass Button */}
             <button 
               onClick={() => setIsAuthenticated(true)}
-              className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2 group"
             >
+              <ShieldAlert className="w-4 h-4 text-gray-400 group-hover:text-white" />
               Enter Local Admin Mode
             </button>
-            <p className="text-xs text-gray-500">Use this if you haven't configured a Google Client ID yet.</p>
+            <p className="text-xs text-gray-500">Bypasses authentication for local editing.</p>
           </div>
         </div>
       </div>
